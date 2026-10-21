@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OAuth PKCE demo</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main>
+    <h1>OAuth 2.0 Authorization Code + PKCE</h1>
+    <p>This public client uses S256 PKCE. It does not contain a client secret.</p>
+    <label><input id="bad-verifier" type="checkbox"> Send an invalid verifier (PKCE negative test)</label>
+    <button id="login">Login with Authorization Server</button>
+    <button id="logout" hidden>Clear session</button>
+    <section aria-live="polite">
+      <h2>Result</h2>
+      <pre id="result">Not authenticated.</pre>
+    </section>
+  </main>
+</body>
+</html>

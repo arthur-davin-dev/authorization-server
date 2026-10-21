@@ -1,0 +1,29 @@
+server:
+  port: ${SERVER_PORT:9000}
+  address: ${SERVER_ADDRESS:127.0.0.1}
+
+spring:
+  application:
+    name: authorization-server
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/authorization}
+    username: ${DB_USER:authorization}
+    password: ${DB_PASSWORD:local_dev_password}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+app:
+  oauth:
+    # Base issuer/origin used to validate tenant issuer hosts. Tenant IDs are issuer paths.
+    issuer: ${OAUTH_ISSUER:http://127.0.0.1:9000}
+    spa-origin: ${SPA_ORIGIN:http://127.0.0.1:9000}
+    spa-redirect-uri: ${SPA_REDIRECT_URI:http://127.0.0.1:9000/}
+    custom-grant-code: ${CUSTOM_GRANT_CODE:local-demo-code}
+  bootstrap-user:
+    enabled: ${BOOTSTRAP_USER_ENABLED:true}
+    username: ${BOOTSTRAP_USER:demo}
+    password: ${BOOTSTRAP_PASSWORD:demo12345}

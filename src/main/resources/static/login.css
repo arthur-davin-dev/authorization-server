@@ -1,0 +1,128 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #172b3a;
+  background: #f3f7f8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(ellipse at 12% 10%, rgba(128, 219, 201, .23), transparent 33rem),
+    radial-gradient(ellipse at 92% 88%, rgba(80, 158, 189, .16), transparent 30rem),
+    #f3f7f8;
+}
+
+.page-shell {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  justify-items: center;
+  gap: 1.4rem;
+  padding: 2rem 1.25rem;
+}
+
+.login-card {
+  width: min(100%, 440px);
+  padding: 2.5rem;
+  border: 1px solid rgba(213, 225, 229, .9);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 24px 70px rgba(28, 61, 74, .12), 0 3px 10px rgba(28, 61, 74, .04);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .7rem;
+  color: #294252;
+  font-size: .9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 10px;
+  background: #dff5ee;
+  color: #087b68;
+  font-family: inherit;
+  font-weight: 800;
+}
+
+.intro { margin: 2.5rem 0 1.8rem; }
+.eyebrow { margin: 0 0 .65rem; color: #168875; font-size: .69rem; font-weight: 700; letter-spacing: .15em; }
+h1 { margin: 0; color: #183345; font-family: inherit; font-size: 2rem; letter-spacing: -.045em; }
+.subtitle { margin: .65rem 0 0; color: #6a7e89; font-size: .94rem; line-height: 1.55; }
+
+.login-form { display: grid; gap: .65rem; }
+.login-form label { margin-top: .3rem; color: #344f5d; font-size: .82rem; font-weight: 600; }
+.login-form input:not([type="hidden"]) {
+  width: 100%;
+  height: 3.15rem;
+  padding: 0 .9rem;
+  border: 1px solid #d8e2e6;
+  border-radius: 10px;
+  outline: 0;
+  background: #fbfdfd;
+  color: #173142;
+  font: inherit;
+  font-size: .9rem;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.login-form input::placeholder { color: #9aaab1; }
+.login-form input:focus { border-color: #249984; background: #fff; box-shadow: 0 0 0 4px rgba(36, 153, 132, .13); }
+.password-label { display: flex; align-items: center; justify-content: space-between; margin-top: .35rem; }
+.password-label label { margin: 0; }
+
+.login-form button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .65rem;
+  height: 3.2rem;
+  margin-top: .85rem;
+  border: 0;
+  border-radius: 10px;
+  background: #087e70;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 700;
+  box-shadow: 0 7px 15px rgba(8, 126, 112, .19);
+  transition: background .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+
+.login-form button:hover { transform: translateY(-1px); background: #066e63; box-shadow: 0 9px 18px rgba(8, 126, 112, .24); }
+.login-form button:focus-visible { outline: 3px solid rgba(8, 126, 112, .3); outline-offset: 3px; }
+.login-form button span { font-size: 1.15rem; font-weight: 400; }
+
+.notice { margin: 0 0 1rem; padding: .8rem .9rem; border-radius: 9px; font-size: .82rem; line-height: 1.45; }
+.notice-error { border: 1px solid #f2c8c4; background: #fff4f2; color: #a53d36; }
+.notice-success { border: 1px solid #bfe6d8; background: #effaf5; color: #18765d; }
+.security-note { margin: 1.35rem 0 0; color: #82929a; font-size: .73rem; text-align: center; }
+.security-note span { margin-right: .25rem; color: #2ca58b; font-size: .6rem; }
+footer { color: #81929a; font-size: .72rem; letter-spacing: .025em; text-align: center; }
+
+@media (max-width: 480px) {
+  .page-shell { padding: 1.1rem; }
+  .login-card { padding: 1.7rem 1.35rem; border-radius: 17px; }
+  .intro { margin-top: 2rem; }
+  h1 { font-size: 1.75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
