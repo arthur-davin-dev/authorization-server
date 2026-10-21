@@ -2,6 +2,7 @@ package kh.eco.istad.authorizationserver.consent.service;
 
 import kh.eco.istad.authorizationserver.consent.entity.OAuthAuthorizationConsentEntity;
 import kh.eco.istad.authorizationserver.consent.repository.OAuthAuthorizationConsentJpaRepository;
+import kh.eco.istad.authorizationserver.tenant.TenantComponentRegistry;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -34,6 +35,7 @@ public class JpaOAuth2AuthorizationConsentService implements OAuth2Authorization
     public void save(OAuth2AuthorizationConsent consent) {
         Assert.notNull(consent, "authorizationConsent cannot be null");
         OAuthAuthorizationConsentEntity entity = new OAuthAuthorizationConsentEntity();
+        entity.tenantId = TenantComponentRegistry.currentTenantId();
         entity.registeredClientId = consent.getRegisteredClientId();
         entity.principalName = consent.getPrincipalName();
         Set<String> authorities = new HashSet<>();
@@ -48,7 +50,8 @@ public class JpaOAuth2AuthorizationConsentService implements OAuth2Authorization
     @Transactional
     public void remove(OAuth2AuthorizationConsent consent) {
         Assert.notNull(consent, "authorizationConsent cannot be null");
-        consents.deleteByRegisteredClientIdAndPrincipalName(consent.getRegisteredClientId(), consent.getPrincipalName());
+        consents.deleteByTenantIdAndRegisteredClientIdAndPrincipalName(
+                TenantComponentRegistry.currentTenantId(), consent.getRegisteredClientId(), consent.getPrincipalName());
     }
 
     @Override
@@ -56,7 +59,8 @@ public class JpaOAuth2AuthorizationConsentService implements OAuth2Authorization
     public OAuth2AuthorizationConsent findById(String registeredClientId, String principalName) {
         Assert.hasText(registeredClientId, "registeredClientId cannot be empty");
         Assert.hasText(principalName, "principalName cannot be empty");
-        return consents.findByRegisteredClientIdAndPrincipalName(registeredClientId, principalName)
+        return consents.findByTenantIdAndRegisteredClientIdAndPrincipalName(
+                TenantComponentRegistry.currentTenantId(), registeredClientId, principalName)
                 .map(this::toDomain).orElse(null);
     }
 

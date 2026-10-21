@@ -13,6 +13,8 @@ public class OAuthAuthorizationEntity {
     @Id
     @Column(length = 100)
     public String id;
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    public String tenantId;
     @Column(name = "registered_client_id", nullable = false, length = 100)
     public String registeredClientId;
     @Column(name = "principal_name", nullable = false, length = 200)

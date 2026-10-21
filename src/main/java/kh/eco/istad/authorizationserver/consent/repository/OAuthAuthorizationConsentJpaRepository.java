@@ -8,7 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface OAuthAuthorizationConsentJpaRepository
         extends JpaRepository<OAuthAuthorizationConsentEntity, AuthorizationConsentId> {
-    Optional<OAuthAuthorizationConsentEntity> findByRegisteredClientIdAndPrincipalName(
-            String registeredClientId, String principalName);
-    void deleteByRegisteredClientIdAndPrincipalName(String registeredClientId, String principalName);
+    Optional<OAuthAuthorizationConsentEntity> findByTenantIdAndRegisteredClientIdAndPrincipalName(
+            String tenantId, String registeredClientId, String principalName);
+    void deleteByTenantIdAndRegisteredClientIdAndPrincipalName(
+            String tenantId, String registeredClientId, String principalName);
 }

@@ -14,6 +14,9 @@ public class OAuthAuthorizationConsentEntity {
     @Column(name = "registered_client_id", length = 100)
     public String registeredClientId;
     @Id
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    public String tenantId;
+    @Id
     @Column(name = "principal_name", length = 200)
     public String principalName;
     @Column(nullable = false, columnDefinition = "text")

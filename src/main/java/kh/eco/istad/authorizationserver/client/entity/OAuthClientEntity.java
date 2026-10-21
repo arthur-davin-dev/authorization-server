@@ -13,7 +13,9 @@ public class OAuthClientEntity {
     @Id
     @Column(length = 100)
     public String id;
-    @Column(name = "client_id", nullable = false, unique = true, length = 200)
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    public String tenantId;
+    @Column(name = "client_id", nullable = false, length = 200)
     public String clientId;
     @Column(name = "client_id_issued_at", nullable = false)
     public Instant clientIdIssuedAt;

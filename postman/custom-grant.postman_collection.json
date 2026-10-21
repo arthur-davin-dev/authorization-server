@@ -1,0 +1,218 @@
+{
+  "info": {
+    "name": "Authorization Server - Custom Grant",
+    "description": "Exercises the custom_code extension grant and uses the returned access token against the private API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:9000"
+    },
+    {
+      "key": "customGrantCode",
+      "value": "local-demo-code"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Request custom grant token (success)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('token request succeeds', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('response contains a bearer access token', function () {",
+              "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+              "  pm.expect(body.scope.split(' ')).to.have.members(['message.read', 'message.write']);",
+              "  pm.expect(body.token_type.toLowerCase()).to.eql('bearer');",
+              "  pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('accessToken', body.access_token);",
+              "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "custom-grant-client",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "custom-grant-secret",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "urn:ietf:params:oauth:grant-type:custom_code",
+              "type": "text"
+            },
+            {
+              "key": "code",
+              "value": "{{customGrantCode}}",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "message.read message.write",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/oauth2/token"
+      }
+    },
+    {
+      "name": "2. Call private API with returned token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('private API accepts the token', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/api/private/hello"
+      }
+    },
+    {
+      "name": "3. Reject invalid custom code",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('invalid grant code is rejected', function () { pm.response.to.have.status(400); });",
+              "pm.test('OAuth error is invalid_grant', function () { pm.expect(pm.response.json().error).to.eql('invalid_grant'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "custom-grant-client",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "custom-grant-secret",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "urn:ietf:params:oauth:grant-type:custom_code",
+              "type": "text"
+            },
+            {
+              "key": "code",
+              "value": "wrong-code",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/oauth2/token"
+      }
+    },
+    {
+      "name": "4. Refresh access token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('refresh token grant succeeds', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('refresh response contains a new access token', function () { pm.expect(body.access_token).to.be.a('string').and.not.empty; });",
+              "pm.collectionVariables.set('accessToken', body.access_token);",
+              "if (body.refresh_token) pm.collectionVariables.set('refreshToken', body.refresh_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "custom-grant-client",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "custom-grant-secret",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "refresh_token",
+              "type": "text"
+            },
+            {
+              "key": "refresh_token",
+              "value": "{{refreshToken}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/oauth2/token"
+      }
+    }
+  ]
+}

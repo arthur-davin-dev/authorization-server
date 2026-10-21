@@ -4,6 +4,7 @@ import kh.eco.istad.authorizationserver.authorization.entity.OAuthAuthorizationE
 import kh.eco.istad.authorizationserver.authorization.repository.OAuthAuthorizationJpaRepository;
 import kh.eco.istad.authorizationserver.common.persistence.OAuthJson;
 import kh.eco.istad.authorizationserver.grant.CustomCodeGrantAuthenticationToken;
+import kh.eco.istad.authorizationserver.tenant.TenantComponentRegistry;
 import java.time.Instant;
 import java.security.Principal;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import org.springframework.security.oauth2.core.OAuth2UserCode;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationCode;
@@ -61,37 +63,39 @@ public class JpaOAuth2AuthorizationService implements OAuth2AuthorizationService
     @Transactional
     public void remove(OAuth2Authorization authorization) {
         Assert.notNull(authorization, "authorization cannot be null");
-        authorizations.deleteById(authorization.getId());
+        authorizations.deleteByIdAndTenantId(authorization.getId(), TenantComponentRegistry.currentTenantId());
     }
 
     @Override
     @Transactional(readOnly = true)
     public OAuth2Authorization findById(String id) {
         Assert.hasText(id, "id cannot be empty");
-        return authorizations.findById(id).map(this::toDomain).orElse(null);
+        return authorizations.findByTenantIdAndId(TenantComponentRegistry.currentTenantId(), id)
+                .map(this::toDomain).orElse(null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public OAuth2Authorization findByToken(String token, OAuth2TokenType tokenType) {
         Assert.hasText(token, "token cannot be empty");
+        String tenantId = TenantComponentRegistry.currentTenantId();
         Optional<OAuthAuthorizationEntity> result;
         if (tokenType == null) {
-            result = authorizations.findByAnyToken(token);
+            result = authorizations.findByAnyTokenAndTenantId(token, tenantId);
         } else if (OAuth2ParameterNames.STATE.equals(tokenType.getValue())) {
-            result = authorizations.findByState(token);
+            result = authorizations.findByTenantIdAndState(tenantId, token);
         } else if (OAuth2ParameterNames.CODE.equals(tokenType.getValue())) {
-            result = authorizations.findByAuthorizationCodeValue(token);
+            result = authorizations.findByTenantIdAndAuthorizationCodeValue(tenantId, token);
         } else if (OAuth2ParameterNames.ACCESS_TOKEN.equals(tokenType.getValue())) {
-            result = authorizations.findByAccessTokenValue(token);
+            result = authorizations.findByTenantIdAndAccessTokenValue(tenantId, token);
         } else if (OAuth2ParameterNames.REFRESH_TOKEN.equals(tokenType.getValue())) {
-            result = authorizations.findByRefreshTokenValue(token);
+            result = authorizations.findByTenantIdAndRefreshTokenValue(tenantId, token);
         } else if (OidcParameterNames.ID_TOKEN.equals(tokenType.getValue())) {
-            result = authorizations.findByOidcIdTokenValue(token);
+            result = authorizations.findByTenantIdAndOidcIdTokenValue(tenantId, token);
         } else if (OAuth2ParameterNames.USER_CODE.equals(tokenType.getValue())) {
-            result = authorizations.findByUserCodeValue(token);
+            result = authorizations.findByTenantIdAndUserCodeValue(tenantId, token);
         } else if (OAuth2ParameterNames.DEVICE_CODE.equals(tokenType.getValue())) {
-            result = authorizations.findByDeviceCodeValue(token);
+            result = authorizations.findByTenantIdAndDeviceCodeValue(tenantId, token);
         } else {
             result = Optional.empty();
         }
@@ -178,11 +182,20 @@ public class JpaOAuth2AuthorizationService implements OAuth2AuthorizationService
     private OAuthAuthorizationEntity toEntity(OAuth2Authorization authorization) {
         OAuthAuthorizationEntity entity = new OAuthAuthorizationEntity();
         entity.id = authorization.getId();
+        entity.tenantId = TenantComponentRegistry.currentTenantId();
         entity.registeredClientId = authorization.getRegisteredClientId();
         entity.principalName = authorization.getPrincipalName();
         entity.authorizationGrantType = authorization.getAuthorizationGrantType().getValue();
         entity.authorizedScopes = StringUtils.collectionToCommaDelimitedString(authorization.getAuthorizedScopes());
-        entity.attributes = json.write(authorization.getAttributes());
+        Map<String, Object> attributes = new HashMap<>(authorization.getAttributes());
+        if (CustomCodeGrantAuthenticationToken.GRANT_TYPE.getValue()
+                .equals(authorization.getAuthorizationGrantType().getValue())) {
+            Object principal = attributes.get(Principal.class.getName());
+            if (principal instanceof Authentication authentication) {
+                attributes.put(Principal.class.getName(), authentication.getName());
+            }
+        }
+        entity.attributes = json.write(attributes);
         entity.state = authorization.getAttribute(OAuth2ParameterNames.STATE);
 
         setToken(authorization.getToken(OAuth2AuthorizationCode.class),

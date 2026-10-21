@@ -1,19 +1,19 @@
 package kh.eco.istad.authorizationserver.config;
 
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.net.URI;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.JWKSelector;
+import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.SignedJWT;
@@ -21,9 +21,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.core.GrantedAuthority;
@@ -42,74 +47,126 @@ public class JwtConfig {
     private static final Set<String> APPLICATION_ROLES = Set.of("ROLE_USER", "ROLE_ADMIN");
 
     @Bean
-    KeyPair signingKeyPair() throws Exception {
-        return generateSigningKeyPair();
+    KeyPair signingKeyPair(PersistentRsaKeyStore keyStore) throws Exception {
+        return keyStore.loadOrCreate(TenantComponentRegistry.DEFAULT_TENANT);
     }
 
     @Bean
-    KeyPair tenantBSigningKeyPair() throws Exception {
-        return generateSigningKeyPair();
-    }
-
-    private static KeyPair generateSigningKeyPair() throws Exception {
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-        keyPairGenerator.initialize(2048);
-        return keyPairGenerator.generateKeyPair();
+    KeyPair tenantBSigningKeyPair(PersistentRsaKeyStore keyStore) throws Exception {
+        return keyStore.loadOrCreate(TenantComponentRegistry.SECOND_TENANT);
     }
 
     @Bean
+    @Primary
     JWKSource<SecurityContext> jwkSource(
             @Qualifier("signingKeyPair") KeyPair signingKeyPair,
             @Qualifier("tenantBSigningKeyPair") KeyPair tenantBSigningKeyPair,
+            PersistentRsaKeyStore keyStore,
             TenantComponentRegistry tenants) {
-        tenants.register(TenantComponentRegistry.DEFAULT_TENANT, JWKSet.class, jwkSet(signingKeyPair));
-        tenants.register(TenantComponentRegistry.SECOND_TENANT, JWKSet.class, jwkSet(tenantBSigningKeyPair));
+        tenants.register(TenantComponentRegistry.DEFAULT_TENANT, JWKSet.class,
+                jwkSet(TenantComponentRegistry.DEFAULT_TENANT, signingKeyPair, keyStore));
+        tenants.register(TenantComponentRegistry.SECOND_TENANT, JWKSet.class,
+                jwkSet(TenantComponentRegistry.SECOND_TENANT, tenantBSigningKeyPair, keyStore));
         return (JWKSelector selector, SecurityContext context) -> selector.select(tenants.get(JWKSet.class));
+    }
+
+    @Bean("signingJwkSource")
+    JWKSource<SecurityContext> signingJwkSource(
+            @Qualifier("signingKeyPair") KeyPair signingKeyPair,
+            @Qualifier("tenantBSigningKeyPair") KeyPair tenantBSigningKeyPair) {
+        return (JWKSelector selector, SecurityContext context) -> {
+            String tenantId = TenantComponentRegistry.currentTenantId();
+            KeyPair keyPair;
+            if (TenantComponentRegistry.DEFAULT_TENANT.equals(tenantId)) {
+                keyPair = signingKeyPair;
+            } else if (TenantComponentRegistry.SECOND_TENANT.equals(tenantId)) {
+                keyPair = tenantBSigningKeyPair;
+            } else {
+                throw new IllegalStateException("Signing key is not configured for issuer tenant " + tenantId);
+            }
+            return selector.select(new JWKSet(activeJwk(keyPair)));
+        };
     }
 
     @Bean
     JwtDecoder jwtDecoder(
             @Qualifier("signingKeyPair") KeyPair signingKeyPair,
             @Qualifier("tenantBSigningKeyPair") KeyPair tenantBSigningKeyPair,
-            @Value("${app.oauth.issuer}") String baseIssuer) {
+            PersistentRsaKeyStore keyStore,
+            @Value("${app.oauth.issuer}") String baseIssuer,
+            @Value("${app.oauth.api-audience}") String apiAudience) {
         URI trustedBase = URI.create(baseIssuer);
         ConcurrentMap<String, JwtDecoder> decoders = new ConcurrentHashMap<>();
         return token -> {
             final String issuer;
             try {
-                issuer = SignedJWT.parse(token).getJWTClaimsSet().getIssuer();
-            } catch (Exception exception) {
-                throw new BadJwtException("Invalid JWT issuer", exception);
-            }
-            if (issuer == null) {
-                throw new BadJwtException("JWT is missing its issuer");
-            }
-            URI issuerUri;
-            String tenantId;
-            try {
-                issuerUri = URI.create(issuer);
+                SignedJWT parsed = SignedJWT.parse(token);
+                issuer = parsed.getJWTClaimsSet().getIssuer();
+                String keyId = parsed.getHeader().getKeyID();
+                if (issuer == null) {
+                    throw new BadJwtException("JWT is missing its issuer");
+                }
+                URI issuerUri = URI.create(issuer);
                 validateIssuerOrigin(trustedBase, issuerUri);
-                tenantId = TenantComponentRegistry.tenantIdForIssuer(issuer);
-            } catch (RuntimeException exception) {
-                throw new BadJwtException("JWT issuer is not registered", exception);
+                String tenantId = TenantComponentRegistry.tenantIdForIssuer(issuer);
+                KeyPair activeKeyPair = TenantComponentRegistry.SECOND_TENANT.equals(tenantId)
+                        ? tenantBSigningKeyPair : signingKeyPair;
+                RSAPublicKey publicKey = keyStore.publicKey(tenantId, keyId, activeKeyPair);
+                JwtDecoder decoder = decoders.computeIfAbsent(issuer + "|" + keyId, ignored -> {
+                    NimbusJwtDecoder created = NimbusJwtDecoder.withPublicKey(publicKey).build();
+                    OAuth2TokenValidator<Jwt> audienceValidator = jwt -> jwt.getAudience().contains(apiAudience)
+                            ? OAuth2TokenValidatorResult.success()
+                            : OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                                    "invalid_token", "Token audience is not accepted by this API", null));
+                    created.setJwtValidator(new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(
+                            JwtValidators.createDefaultWithIssuer(issuer), audienceValidator));
+                    return created;
+                });
+                return decoder.decode(token);
+            } catch (Exception exception) {
+                if (exception instanceof BadJwtException badJwtException) {
+                    throw badJwtException;
+                }
+                throw new BadJwtException("Invalid JWT", exception);
             }
-            KeyPair keyPair = TenantComponentRegistry.SECOND_TENANT.equals(tenantId)
-                    ? tenantBSigningKeyPair : signingKeyPair;
-            JwtDecoder decoder = decoders.computeIfAbsent(issuer, key -> {
-                NimbusJwtDecoder created = NimbusJwtDecoder.withPublicKey((RSAPublicKey) keyPair.getPublic()).build();
-                created.setJwtValidator(JwtValidators.createDefaultWithIssuer(key));
-                return created;
-            });
-            return decoder.decode(token);
         };
     }
 
-    private static JWKSet jwkSet(KeyPair keyPair) {
-        RSAKey key = new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
-                .privateKey((RSAPrivateKey) keyPair.getPrivate())
-                .keyID(UUID.randomUUID().toString())
-                .build();
-        return new JWKSet(key);
+    private static JWKSet jwkSet(String tenantId, KeyPair keyPair, PersistentRsaKeyStore keyStore) {
+        try {
+            List<RSAPublicKey> publicKeys = keyStore.publicKeys(tenantId, keyPair);
+            List<JWK> jwks = new java.util.ArrayList<>();
+            RSAPublicKey activePublicKey = (RSAPublicKey) keyPair.getPublic();
+            jwks.add(new RSAKey.Builder(activePublicKey)
+                    .privateKey((RSAPrivateKey) keyPair.getPrivate())
+                    .keyID(PersistentRsaKeyStore.keyId(activePublicKey))
+                    .keyUse(KeyUse.SIGNATURE)
+                    .build());
+            for (RSAPublicKey publicKey : publicKeys) {
+                if (!publicKey.equals(activePublicKey)) {
+                    jwks.add(new RSAKey.Builder(publicKey)
+                            .keyID(PersistentRsaKeyStore.keyId(publicKey))
+                            .keyUse(KeyUse.SIGNATURE)
+                            .build());
+                }
+            }
+            return new JWKSet(jwks);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not load signing keys for tenant " + tenantId, exception);
+        }
+    }
+
+    private static RSAKey activeJwk(KeyPair keyPair) {
+        try {
+            RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
+            return new RSAKey.Builder(publicKey)
+                    .privateKey((RSAPrivateKey) keyPair.getPrivate())
+                    .keyID(PersistentRsaKeyStore.keyId(publicKey))
+                    .keyUse(KeyUse.SIGNATURE)
+                    .build();
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not initialize active RSA signing key", exception);
+        }
     }
 
     private static void validateIssuerOrigin(URI trustedBase, URI candidate) {
@@ -128,7 +185,8 @@ public class JwtConfig {
     }
 
     @Bean
-    OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
+    OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(
+            @Value("${app.oauth.api-audience}") String apiAudience) {
         return context -> {
             if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
                 List<String> roles = context.getPrincipal().getAuthorities().stream()
@@ -138,13 +196,14 @@ public class JwtConfig {
                         .sorted()
                         .toList();
                 context.getClaims().claim("roles", roles);
+                context.getClaims().audience(List.of(apiAudience));
             }
         };
     }
 
     @Bean
     OAuth2TokenGenerator<?> oauth2TokenGenerator(
-            JWKSource<SecurityContext> jwkSource,
+            @Qualifier("signingJwkSource") JWKSource<SecurityContext> jwkSource,
             OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer) {
         JwtGenerator jwtGenerator = new JwtGenerator(new NimbusJwtEncoder(jwkSource));
         jwtGenerator.setJwtCustomizer(jwtTokenCustomizer);

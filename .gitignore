@@ -1,8 +1,11 @@
-postman
+postman/
+!postman/
+!postman/*.postman_collection.json
 .gradle
 build/
 .env
 !.env.example
+.local-keys/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/

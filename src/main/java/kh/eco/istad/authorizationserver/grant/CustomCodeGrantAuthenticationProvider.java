@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
@@ -22,6 +23,7 @@ import org.springframework.security.oauth2.server.authorization.authentication.O
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -48,7 +50,8 @@ public final class CustomCodeGrantAuthenticationProvider implements Authenticati
                 || !client.isAuthenticated()) {
             throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_CLIENT);
         }
-        var registeredClient = client.getRegisteredClient();
+        org.springframework.security.oauth2.server.authorization.client.RegisteredClient registeredClient =
+                client.getRegisteredClient();
         if (registeredClient == null || !registeredClient.getAuthorizationGrantTypes().contains(grant.getGrantType())) {
             throw new OAuth2AuthenticationException(OAuth2ErrorCodes.UNAUTHORIZED_CLIENT);
         }
@@ -57,7 +60,7 @@ public final class CustomCodeGrantAuthenticationProvider implements Authenticati
         }
 
         Set<String> scopes = requestedScopes(grant.getAdditionalParameters(), registeredClient.getScopes());
-        var tokenContext = DefaultOAuth2TokenContext.builder()
+        OAuth2TokenContext tokenContext = DefaultOAuth2TokenContext.builder()
                 .registeredClient(registeredClient)
                 .principal(client)
                 .authorizationServerContext(AuthorizationServerContextHolder.getContext())
@@ -74,18 +77,25 @@ public final class CustomCodeGrantAuthenticationProvider implements Authenticati
         OAuth2AccessToken accessToken = new OAuth2AccessToken(
                 OAuth2AccessToken.TokenType.BEARER, generatedToken.getTokenValue(),
                 generatedToken.getIssuedAt(), generatedToken.getExpiresAt(), scopes);
-        OAuth2Token generatedRefreshToken = tokenGenerator.generate(DefaultOAuth2TokenContext.builder()
-                .registeredClient(registeredClient)
-                .principal(client)
-                .authorizationServerContext(AuthorizationServerContextHolder.getContext())
-                .authorizedScopes(scopes)
-                .tokenType(OAuth2TokenType.REFRESH_TOKEN)
-                .authorizationGrantType(grant.getGrantType())
-                .authorizationGrant(grant)
-                .build());
-        if (!(generatedRefreshToken instanceof OAuth2RefreshToken refreshToken)) {
-            throw new OAuth2AuthenticationException(new OAuth2Error(
-                    OAuth2ErrorCodes.SERVER_ERROR, "The token generator failed to generate the refresh token.", null));
+        OAuth2RefreshToken refreshToken = null;
+        if (registeredClient.getAuthorizationGrantTypes().contains(AuthorizationGrantType.REFRESH_TOKEN)
+                && !registeredClient.getClientAuthenticationMethods().contains(
+                        org.springframework.security.oauth2.core.ClientAuthenticationMethod.NONE)) {
+            OAuth2Token generatedRefreshToken = tokenGenerator.generate(DefaultOAuth2TokenContext.builder()
+                    .registeredClient(registeredClient)
+                    .principal(client)
+                    .authorizationServerContext(AuthorizationServerContextHolder.getContext())
+                    .authorizedScopes(scopes)
+                    .tokenType(OAuth2TokenType.REFRESH_TOKEN)
+                    .authorizationGrantType(grant.getGrantType())
+                    .authorizationGrant(grant)
+                    .build());
+            if (!(generatedRefreshToken instanceof OAuth2RefreshToken generatedRefresh)) {
+                throw new OAuth2AuthenticationException(new OAuth2Error(
+                        OAuth2ErrorCodes.SERVER_ERROR,
+                        "The token generator failed to generate the refresh token.", null));
+            }
+            refreshToken = generatedRefresh;
         }
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.withRegisteredClient(registeredClient)
                 .principalName(client.getName())
@@ -95,8 +105,10 @@ public final class CustomCodeGrantAuthenticationProvider implements Authenticati
                 .attribute(java.security.Principal.class.getName(), client.getName())
                 .authorizedScopes(scopes)
                 .authorizationGrantType(grant.getGrantType())
-                .accessToken(accessToken)
-                .refreshToken(refreshToken);
+                .accessToken(accessToken);
+        if (refreshToken != null) {
+            authorizationBuilder.refreshToken(refreshToken);
+        }
         authorizationService.save(authorizationBuilder.build());
         return new OAuth2AccessTokenAuthenticationToken(registeredClient, client, accessToken, refreshToken);
     }

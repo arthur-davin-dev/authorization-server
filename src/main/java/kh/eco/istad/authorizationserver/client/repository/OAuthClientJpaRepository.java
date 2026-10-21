@@ -6,5 +6,6 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface OAuthClientJpaRepository extends JpaRepository<OAuthClientEntity, String> {
-    Optional<OAuthClientEntity> findByClientId(String clientId);
+    Optional<OAuthClientEntity> findByTenantIdAndId(String tenantId, String id);
+    Optional<OAuthClientEntity> findByTenantIdAndClientId(String tenantId, String clientId);
 }

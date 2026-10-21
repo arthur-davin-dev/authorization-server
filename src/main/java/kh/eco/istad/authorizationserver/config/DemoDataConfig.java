@@ -5,6 +5,7 @@ import java.util.UUID;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.LinkedHashSet;
+import java.time.Duration;
 
 import kh.eco.istad.authorizationserver.user.entity.AppUserEntity;
 import kh.eco.istad.authorizationserver.user.repository.AppUserRepository;
@@ -27,9 +28,19 @@ public class DemoDataConfig {
     ApplicationRunner registerSpaClient(
             RegisteredClientRepository clients,
             PasswordEncoder passwordEncoder,
-            @Value("${app.oauth.spa-redirect-uri}") String redirectUri) {
+            @Value("${app.oauth.spa-redirect-uri}") String redirectUri,
+            @Value("${app.oauth.access-token-ttl-seconds}") long accessTokenTtlSeconds,
+            @Value("${app.oauth.refresh-token-ttl-seconds}") long refreshTokenTtlSeconds,
+            @Value("${app.oauth.custom-grant-client-secret}") String customGrantClientSecret,
+            @Value("${app.oauth.registrar-client-secret}") String registrarClientSecret) {
         return args -> {
             Set<String> allowedRedirectUris = loopbackRedirectUris(redirectUri);
+            TokenSettings tokenSettings = TokenSettings.builder()
+                    .authorizationCodeTimeToLive(Duration.ofMinutes(5))
+                    .accessTokenTimeToLive(Duration.ofSeconds(accessTokenTtlSeconds))
+                    .refreshTokenTimeToLive(Duration.ofSeconds(refreshTokenTtlSeconds))
+                    .reuseRefreshTokens(false)
+                    .build();
             RegisteredClient spaClient = RegisteredClient.withId("authorization-spa-v1")
                     .clientId("authorization-spa")
                     .clientName("Local PKCE SPA")
@@ -44,30 +55,32 @@ public class DemoDataConfig {
                             .requireAuthorizationConsent(true)
                             .requireProofKey(true)
                             .build())
-                    .tokenSettings(TokenSettings.builder().build())
+                    .tokenSettings(tokenSettings)
                     .build();
             clients.save(spaClient);
 
             RegisteredClient customGrantClient = RegisteredClient.withId("custom-grant-client-v1")
                     .clientId("custom-grant-client")
                     .clientName("Local Custom Grant Client")
-                    .clientSecret(passwordEncoder.encode("custom-grant-secret"))
+                    .clientSecret(passwordEncoder.encode(customGrantClientSecret))
                     .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                     .authorizationGrantType(kh.eco.istad.authorizationserver.grant.CustomCodeGrantAuthenticationToken.GRANT_TYPE)
                     .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                     .scope("message.read")
                     .scope("message.write")
+                    .tokenSettings(tokenSettings)
                     .build();
             clients.save(customGrantClient);
 
             RegisteredClient registrarClient = RegisteredClient.withId("client-registrar-v1")
                     .clientId("client-registrar")
                     .clientName("Local Dynamic Client Registrar")
-                    .clientSecret(passwordEncoder.encode("client-registrar-secret"))
+                    .clientSecret(passwordEncoder.encode(registrarClientSecret))
                     .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                     .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                     .scope("client.create")
                     .scope("client.read")
+                    .tokenSettings(tokenSettings)
                     .build();
             clients.save(registrarClient);
         };

@@ -6,7 +6,7 @@ spring:
   application:
     name: authorization-server
   datasource:
-    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/authorization}
+    url: "${DB_URL:jdbc:postgresql://127.0.0.1:${DB_PORT:5432}/${DB_NAME:authorization}}"
     username: ${DB_USER:authorization}
     password: ${DB_PASSWORD:local_dev_password}
   jpa:
@@ -23,6 +23,14 @@ app:
     spa-origin: ${SPA_ORIGIN:http://127.0.0.1:9000}
     spa-redirect-uri: ${SPA_REDIRECT_URI:http://127.0.0.1:9000/}
     custom-grant-code: ${CUSTOM_GRANT_CODE:local-demo-code}
+    custom-grant-client-secret: ${CUSTOM_GRANT_CLIENT_SECRET:custom-grant-secret}
+    registrar-client-secret: ${CLIENT_REGISTRAR_SECRET:client-registrar-secret}
+    tenant-b-client-secret: ${TENANT_B_CLIENT_SECRET:tenant-b-secret}
+    tenant-b-registrar-secret: ${TENANT_B_REGISTRAR_SECRET:tenant-b-registrar-secret}
+    signing-key-dir: ${OAUTH_SIGNING_KEY_DIR:.local-keys}
+    api-audience: ${API_AUDIENCE:api://authorization-server}
+    access-token-ttl-seconds: ${ACCESS_TOKEN_TTL_SECONDS:300}
+    refresh-token-ttl-seconds: ${REFRESH_TOKEN_TTL_SECONDS:86400}
   bootstrap-user:
     enabled: ${BOOTSTRAP_USER_ENABLED:true}
     username: ${BOOTSTRAP_USER:demo}

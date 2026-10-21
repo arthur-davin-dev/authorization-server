@@ -4,14 +4,17 @@ import java.io.Serializable;
 import java.util.Objects;
 
 public class AuthorizationConsentId implements Serializable {
+    private static final long serialVersionUID = 1L;
     private String registeredClientId;
+    private String tenantId;
     private String principalName;
 
     public AuthorizationConsentId() {
     }
 
-    public AuthorizationConsentId(String registeredClientId, String principalName) {
+    public AuthorizationConsentId(String registeredClientId, String tenantId, String principalName) {
         this.registeredClientId = registeredClientId;
+        this.tenantId = tenantId;
         this.principalName = principalName;
     }
 
@@ -24,11 +27,12 @@ public class AuthorizationConsentId implements Serializable {
             return false;
         }
         return Objects.equals(registeredClientId, other.registeredClientId)
+                && Objects.equals(tenantId, other.tenantId)
                 && Objects.equals(principalName, other.principalName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(registeredClientId, principalName);
+        return Objects.hash(registeredClientId, tenantId, principalName);
     }
 }

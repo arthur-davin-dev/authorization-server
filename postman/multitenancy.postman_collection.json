@@ -1,0 +1,83 @@
+{
+  "info": {
+    "name": "Authorization Server - Multitenancy",
+    "description": "Checks issuer metadata, tenant-specific client credentials, tenant-specific signing keys, and trusted JWT resource access.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:9000" },
+    { "key": "tenantBToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Tenant B OpenID metadata",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('tenant B metadata is available', function () { pm.response.to.have.status(200); });",
+        "pm.test('metadata issuer identifies tenant B', function () { pm.expect(pm.response.json().issuer).to.eql(pm.collectionVariables.get('baseUrl') + '/tenant-b'); });"
+      ] } }],
+      "request": { "method": "GET", "url": "{{baseUrl}}/tenant-b/.well-known/openid-configuration" }
+    },
+    {
+      "name": "2. Request token from Tenant B",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('tenant B token request succeeds', function () { pm.response.to.have.status(200); });",
+        "const body = pm.response.json();",
+        "const claims = JSON.parse(atob(body.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+        "pm.test('token issuer is tenant B', function () { pm.expect(claims.iss).to.eql(pm.collectionVariables.get('baseUrl') + '/tenant-b'); });",
+        "pm.collectionVariables.set('tenantBToken', body.access_token);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "auth": { "type": "basic", "basic": [
+          { "key": "username", "value": "tenant-b-client", "type": "string" },
+          { "key": "password", "value": "tenant-b-secret", "type": "string" }
+        ] },
+        "body": { "mode": "urlencoded", "urlencoded": [
+          { "key": "grant_type", "value": "client_credentials", "type": "text" },
+          { "key": "scope", "value": "tenant.read", "type": "text" }
+        ] },
+        "url": "{{baseUrl}}/tenant-b/oauth2/token"
+      }
+    },
+    {
+      "name": "3. Use Tenant B token at protected API",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('API accepts the tenant B token', function () { pm.response.to.have.status(200); });"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{tenantBToken}}", "type": "string" }] },
+        "url": "{{baseUrl}}/api/private/hello"
+      }
+    },
+    {
+      "name": "4. Tenant B token does not have the default api.read scope",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('tenant.read token cannot access api.read endpoint', function () { pm.response.to.have.status(403); });"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{tenantBToken}}", "type": "string" }] },
+        "url": "{{baseUrl}}/api/scoped/hello"
+      }
+    },
+    {
+      "name": "5. Tenant B cannot use the default tenant client",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('default tenant client is unknown to tenant B', function () { pm.response.to.have.status(401); });"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "auth": { "type": "basic", "basic": [
+          { "key": "username", "value": "custom-grant-client", "type": "string" },
+          { "key": "password", "value": "custom-grant-secret", "type": "string" }
+        ] },
+        "body": { "mode": "urlencoded", "urlencoded": [
+          { "key": "grant_type", "value": "urn:ietf:params:oauth:grant-type:custom_code", "type": "text" },
+          { "key": "code", "value": "local-demo-code", "type": "text" }
+        ] },
+        "url": "{{baseUrl}}/tenant-b/oauth2/token"
+      }
+    }
+  ]
+}

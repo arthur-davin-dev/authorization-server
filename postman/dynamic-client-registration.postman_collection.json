@@ -1,0 +1,173 @@
+{
+  "info": {
+    "name": "Authorization Server - Dynamic Client Registration",
+    "description": "Obtains a short-lived client.create token, registers a confidential OIDC client, and retrieves its registration.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:9000"
+    },
+    {
+      "key": "initialAccessToken",
+      "value": ""
+    },
+    {
+      "key": "registrationAccessToken",
+      "value": ""
+    },
+    {
+      "key": "registrationClientUri",
+      "value": ""
+    },
+    {
+      "key": "dynamicClientId",
+      "value": ""
+    },
+    {
+      "key": "dynamicClientSecret",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get short-lived client.create token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('registrar token request succeeds', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('token is scoped only to client.create', function () { pm.expect(body.scope).to.eql('client.create'); });",
+              "pm.collectionVariables.set('initialAccessToken', body.access_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "client-registrar",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "client-registrar-secret",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "client.create",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/oauth2/token"
+      }
+    },
+    {
+      "name": "2. Register a confidential authorization-code client",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('client was created', function () { pm.response.to.have.status(201); });",
+              "const body = pm.response.json();",
+              "pm.test('response contains client credentials and read token', function () {",
+              "  pm.expect(body.client_id).to.be.a('string').and.not.empty;",
+              "  pm.expect(body.client_secret).to.be.a('string').and.not.empty;",
+              "  pm.expect(body.registration_access_token).to.be.a('string').and.not.empty;",
+              "  pm.expect(body.registration_client_uri).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.collectionVariables.set('dynamicClientId', body.client_id);",
+              "pm.collectionVariables.set('dynamicClientSecret', body.client_secret);",
+              "pm.collectionVariables.set('registrationAccessToken', body.registration_access_token);",
+              "pm.collectionVariables.set('registrationClientUri', body.registration_client_uri);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{initialAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"client_name\": \"Postman Dynamic Client\",\n  \"redirect_uris\": [\"https://oauth.pstmn.io/v1/callback\"],\n  \"grant_types\": [\"authorization_code\"],\n  \"response_types\": [\"code\"],\n  \"scope\": \"openid profile api.read\",\n  \"token_endpoint_auth_method\": \"client_secret_basic\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/connect/register"
+      }
+    },
+    {
+      "name": "3. Retrieve the newly registered client",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('registered client can be retrieved', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('retrieved registration matches', function () {",
+              "  pm.expect(body.client_id).to.eql(pm.collectionVariables.get('dynamicClientId'));",
+              "  pm.expect(body.client_name).to.eql('Postman Dynamic Client');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{registrationAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{registrationClientUri}}"
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package kh.eco.istad.authorizationserver.client.service;
 import kh.eco.istad.authorizationserver.client.entity.OAuthClientEntity;
 import kh.eco.istad.authorizationserver.client.repository.OAuthClientJpaRepository;
 import kh.eco.istad.authorizationserver.common.persistence.OAuthJson;
+import kh.eco.istad.authorizationserver.tenant.TenantComponentRegistry;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
@@ -31,9 +32,15 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
     @Override
     @Transactional
     public void save(RegisteredClient registeredClient) {
+        saveForTenant(TenantComponentRegistry.currentTenantId(), registeredClient);
+    }
+
+    @Transactional
+    public void saveForTenant(String tenantId, RegisteredClient registeredClient) {
         Assert.notNull(registeredClient, "registeredClient cannot be null");
         OAuthClientEntity entity = new OAuthClientEntity();
         entity.id = registeredClient.getId();
+        entity.tenantId = tenantId;
         entity.clientId = registeredClient.getClientId();
         entity.clientIdIssuedAt = registeredClient.getClientIdIssuedAt() != null
                 ? registeredClient.getClientIdIssuedAt()
@@ -57,14 +64,16 @@ public class JpaRegisteredClientRepository implements RegisteredClientRepository
     @Transactional(readOnly = true)
     public RegisteredClient findById(String id) {
         Assert.hasText(id, "id cannot be empty");
-        return clients.findById(id).map(this::toDomain).orElse(null);
+        return clients.findByTenantIdAndId(TenantComponentRegistry.currentTenantId(), id)
+                .map(this::toDomain).orElse(null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public RegisteredClient findByClientId(String clientId) {
         Assert.hasText(clientId, "clientId cannot be empty");
-        return clients.findByClientId(clientId).map(this::toDomain).orElse(null);
+        return clients.findByTenantIdAndClientId(TenantComponentRegistry.currentTenantId(), clientId)
+                .map(this::toDomain).orElse(null);
     }
 
     private RegisteredClient toDomain(OAuthClientEntity entity) {

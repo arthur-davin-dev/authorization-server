@@ -3,6 +3,8 @@ package kh.eco.istad.authorizationserver.config;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.HashMap;
+import java.util.Map;
 
 import kh.eco.istad.authorizationserver.grant.CustomCodeGrantAuthenticationConverter;
 import kh.eco.istad.authorizationserver.grant.CustomCodeGrantAuthenticationProvider;
@@ -17,10 +19,12 @@ import org.springframework.security.oauth2.server.authorization.config.annotatio
 import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcClientRegistrationAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcClientRegistrationAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcClientRegistrationAuthenticationValidator;
+import org.springframework.security.oauth2.server.authorization.oidc.OidcClientRegistration;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
+import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
@@ -39,6 +43,15 @@ public class AuthorizationServerConfig {
         http.securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, server -> server
                         .oidc(oidc -> oidc
+                                .userInfoEndpoint(userInfo -> userInfo.userInfoMapper(context -> {
+                                    Map<String, Object> claims = new HashMap<>();
+                                    String subject = context.getAuthorization().getPrincipalName();
+                                    claims.put("sub", subject);
+                                    if (context.getAccessToken().getScopes().contains(OidcScopes.PROFILE)) {
+                                        claims.put("preferred_username", subject);
+                                    }
+                                    return new OidcUserInfo(claims);
+                                }))
                                 .clientRegistrationEndpoint(registration -> registration
                                         .authenticationProviders(dynamicRegistrationValidator())))
                         .tokenEndpoint(token -> token
@@ -60,7 +73,7 @@ public class AuthorizationServerConfig {
                     OidcClientRegistrationAuthenticationValidator.DEFAULT_POST_LOGOUT_REDIRECT_URI_VALIDATOR.accept(context);
                     OidcClientRegistrationAuthenticationValidator.DEFAULT_JWK_SET_URI_VALIDATOR.accept(context);
 
-                    var registration = ((OidcClientRegistrationAuthenticationToken) context.getAuthentication())
+                    OidcClientRegistration registration = ((OidcClientRegistrationAuthenticationToken) context.getAuthentication())
                             .getClientRegistration();
                     List<String> redirects = registration.getRedirectUris();
                     List<String> scopes = registration.getScopes();

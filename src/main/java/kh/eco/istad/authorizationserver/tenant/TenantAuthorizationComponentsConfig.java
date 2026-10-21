@@ -3,16 +3,17 @@ package kh.eco.istad.authorizationserver.tenant;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationConsentService;
-import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
+import java.time.Duration;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 
 import kh.eco.istad.authorizationserver.authorization.service.JpaOAuth2AuthorizationService;
 import kh.eco.istad.authorizationserver.client.service.JpaRegisteredClientRepository;
@@ -25,27 +26,39 @@ public class TenantAuthorizationComponentsConfig {
     RegisteredClientRepository tenantAwareRegisteredClientRepository(
             JpaRegisteredClientRepository defaultRepository,
             TenantComponentRegistry registry,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            @Value("${app.oauth.access-token-ttl-seconds}") long accessTtl,
+            @Value("${app.oauth.refresh-token-ttl-seconds}") long refreshTtl,
+            @Value("${app.oauth.tenant-b-client-secret}") String tenantClientSecret,
+            @Value("${app.oauth.tenant-b-registrar-secret}") String tenantRegistrarSecret) {
         registry.register(TenantComponentRegistry.DEFAULT_TENANT, RegisteredClientRepository.class, defaultRepository);
+        TokenSettings tokenSettings = TokenSettings.builder()
+                .accessTokenTimeToLive(Duration.ofSeconds(accessTtl))
+                .refreshTokenTimeToLive(Duration.ofSeconds(refreshTtl))
+                .reuseRefreshTokens(false)
+                .build();
         RegisteredClient tenantClient = RegisteredClient.withId("tenant-b-client-v1")
                 .clientId("tenant-b-client")
                 .clientName("Tenant B Postman Client")
-                .clientSecret(passwordEncoder.encode("tenant-b-secret"))
+                .clientSecret(passwordEncoder.encode(tenantClientSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scope("tenant.read")
+                .tokenSettings(tokenSettings)
                 .build();
+        defaultRepository.saveForTenant(TenantComponentRegistry.SECOND_TENANT, tenantClient);
         RegisteredClient tenantRegistrar = RegisteredClient.withId("tenant-b-client-registrar-v1")
                 .clientId("tenant-b-client-registrar")
                 .clientName("Tenant B Dynamic Client Registrar")
-                .clientSecret(passwordEncoder.encode("tenant-b-registrar-secret"))
+                .clientSecret(passwordEncoder.encode(tenantRegistrarSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scope("client.create")
                 .scope("client.read")
+                .tokenSettings(tokenSettings)
                 .build();
-        registry.register(TenantComponentRegistry.SECOND_TENANT, RegisteredClientRepository.class,
-                new InMemoryRegisteredClientRepository(tenantClient, tenantRegistrar));
+        defaultRepository.saveForTenant(TenantComponentRegistry.SECOND_TENANT, tenantRegistrar);
+        registry.register(TenantComponentRegistry.SECOND_TENANT, RegisteredClientRepository.class, defaultRepository);
         return new TenantRegisteredClientRepository(registry);
     }
 
@@ -55,8 +68,7 @@ public class TenantAuthorizationComponentsConfig {
             JpaOAuth2AuthorizationService defaultService,
             TenantComponentRegistry registry) {
         registry.register(TenantComponentRegistry.DEFAULT_TENANT, OAuth2AuthorizationService.class, defaultService);
-        registry.register(TenantComponentRegistry.SECOND_TENANT, OAuth2AuthorizationService.class,
-                new InMemoryOAuth2AuthorizationService());
+        registry.register(TenantComponentRegistry.SECOND_TENANT, OAuth2AuthorizationService.class, defaultService);
         return new TenantOAuth2AuthorizationService(registry);
     }
 
@@ -66,8 +78,7 @@ public class TenantAuthorizationComponentsConfig {
             JpaOAuth2AuthorizationConsentService defaultService,
             TenantComponentRegistry registry) {
         registry.register(TenantComponentRegistry.DEFAULT_TENANT, OAuth2AuthorizationConsentService.class, defaultService);
-        registry.register(TenantComponentRegistry.SECOND_TENANT, OAuth2AuthorizationConsentService.class,
-                new InMemoryOAuth2AuthorizationConsentService());
+        registry.register(TenantComponentRegistry.SECOND_TENANT, OAuth2AuthorizationConsentService.class, defaultService);
         return new TenantOAuth2AuthorizationConsentService(registry);
     }
 
