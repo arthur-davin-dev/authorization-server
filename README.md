@@ -26,6 +26,7 @@ On Windows, copy `.env.example` to `.env`, set the same variables in the termina
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection | local Compose database |
 | `OAUTH_ISSUER` | Trusted issuer origin | `http://127.0.0.1:9000` |
 | `SPA_ORIGIN`, `SPA_REDIRECT_URI` | Exact SPA CORS origin and callback | loopback origin and `/` |
+| `POSTMAN_REDIRECT_URI` | Exact callback for the local Postman PKCE client | `https://oauth.pstmn.io/v1/callback` |
 | `OAUTH_SIGNING_KEY_DIR` | Persistent root and tenant RSA keys | `.local-keys` |
 | `API_AUDIENCE` | Required audience for protected API JWTs | `api://authorization-server` |
 | `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS` | Built-in client token lifetimes | `300`, `86400` |
@@ -69,11 +70,14 @@ On first start, persistent RSA keys are created under `.local-keys/default/` and
 | Role restricted (`ROLE_ADMIN`) | `GET http://127.0.0.1:9000/api/admin` |
 | Custom grant token | `POST http://127.0.0.1:9000/oauth2/token` |
 
-The registered SPA has client ID `authorization-spa`, authentication method `none`, authorization-code grant, scopes `openid profile api.read`, user consent enabled, and PKCE required. There is no client secret. The default exact redirect URIs are `http://127.0.0.1:9000/` and `http://localhost:9000/`; configure a single intended URI through `SPA_REDIRECT_URI` for a deployment. The SPA uses the same origin for authorization and callback. Keep the same hostname before and after login because browser session storage is origin-specific. CORS allows only `SPA_ORIGIN`, without credentials. The API chain is stateless bearer-token auth and disables CSRF only for `/api/**`; browser form login keeps CSRF enabled.
+The registered SPA has client ID `authorization-spa`, authentication method `none`, authorization-code grant, scopes `openid profile api.read`, user consent enabled, and PKCE required. There is no client secret. The default exact redirect URIs are `http://127.0.0.1:9000/` and `http://localhost:9000/`; configure a single intended URI through `SPA_REDIRECT_URI` for a deployment. The SPA uses the same origin for authorization and callback. Keep the same hostname before and after login because browser session storage is origin-specific. A separate confidential PKCE client, `authorization-postman`, uses `POSTMAN_REDIRECT_URI` (default `https://oauth.pstmn.io/v1/callback`) and supports refresh tokens when `offline_access` is requested. Set its secret with `POSTMAN_CLIENT_SECRET`; Spring Authorization Server does not issue refresh tokens to public (`none`) clients. CORS allows only `SPA_ORIGIN`, without credentials. The API chain is stateless bearer-token auth and disables CSRF only for `/api/**`; browser form login keeps CSRF enabled.
+
+To obtain a user token in Postman, choose **Authorization → OAuth 2.0 → Get New Access Token** and configure **Authorization Code (With PKCE)**, Auth URL `http://localhost:9000/oauth2/authorize`, Token URL `http://localhost:9000/oauth2/token`, client ID `authorization-postman`, client secret from `POSTMAN_CLIENT_SECRET` (default `postman-local-secret`), callback `https://oauth.pstmn.io/v1/callback`, challenge method `S256`, and scope `openid profile api.read offline_access`. Set client authentication to **Send as Basic Auth header**. Request a token, sign in using the registered user, approve consent, and let Postman exchange the code. Postman retains the matching verifier. Restart the server after adding the client; existing registrations are updated from this configuration on startup.
 
 | Built-in client | Grant | Scope | Refresh token |
 | --- | --- | --- | --- |
 | `authorization-spa` | Authorization Code + PKCE | `openid profile api.read` | No |
+| `authorization-postman` | Authorization Code + PKCE | `openid profile api.read offline_access` | Yes, when requested |
 | `custom-grant-client` | `custom_code`, refresh | `message.read message.write` | Yes, rotating |
 | `client-registrar` | Client Credentials | `client.create client.read` | No |
 | `tenant-b-client` | Client Credentials | `tenant.read` | No |

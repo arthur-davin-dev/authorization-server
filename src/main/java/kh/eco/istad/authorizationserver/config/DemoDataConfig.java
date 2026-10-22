@@ -29,12 +29,15 @@ public class DemoDataConfig {
             RegisteredClientRepository clients,
             PasswordEncoder passwordEncoder,
             @Value("${app.oauth.spa-redirect-uri}") String redirectUri,
+            @Value("${app.oauth.postman-redirect-uri}") String postmanRedirectUri,
+            @Value("${app.oauth.postman-client-secret}") String postmanClientSecret,
             @Value("${app.oauth.access-token-ttl-seconds}") long accessTokenTtlSeconds,
             @Value("${app.oauth.refresh-token-ttl-seconds}") long refreshTokenTtlSeconds,
             @Value("${app.oauth.custom-grant-client-secret}") String customGrantClientSecret,
             @Value("${app.oauth.registrar-client-secret}") String registrarClientSecret) {
         return args -> {
             Set<String> allowedRedirectUris = loopbackRedirectUris(redirectUri);
+            allowedRedirectUris.addAll(loopbackRedirectUris(swaggerRedirectUri(redirectUri)));
             TokenSettings tokenSettings = TokenSettings.builder()
                     .authorizationCodeTimeToLive(Duration.ofMinutes(5))
                     .accessTokenTimeToLive(Duration.ofSeconds(accessTokenTtlSeconds))
@@ -58,6 +61,28 @@ public class DemoDataConfig {
                     .tokenSettings(tokenSettings)
                     .build();
             clients.save(spaClient);
+
+            // Spring Authorization Server does not issue refresh tokens to public clients.
+            // Keep PKCE and use confidential client authentication for this local Postman client.
+            RegisteredClient postmanClient = RegisteredClient.withId("authorization-postman-v1")
+                    .clientId("authorization-postman")
+                    .clientName("Local Postman PKCE Client")
+                    .clientSecret(passwordEncoder.encode(postmanClientSecret))
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                    .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                    .redirectUri(postmanRedirectUri)
+                    .scope(OidcScopes.OPENID)
+                    .scope(OidcScopes.PROFILE)
+                    .scope("api.read")
+                    .scope("offline_access")
+                    .clientSettings(ClientSettings.builder()
+                            .requireAuthorizationConsent(true)
+                            .requireProofKey(true)
+                            .build())
+                    .tokenSettings(tokenSettings)
+                    .build();
+            clients.save(postmanClient);
 
             RegisteredClient customGrantClient = RegisteredClient.withId("custom-grant-client-v1")
                     .clientId("custom-grant-client")
@@ -103,6 +128,16 @@ public class DemoDataConfig {
             }
         }
         return redirectUris;
+    }
+
+    private static String swaggerRedirectUri(String configuredSpaRedirectUri) {
+        URI uri = URI.create(configuredSpaRedirectUri);
+        try {
+            return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(),
+                    "/swagger-ui/oauth2-redirect.html", null, null).toString();
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("Invalid SPA redirect URI", exception);
+        }
     }
 
     @Bean

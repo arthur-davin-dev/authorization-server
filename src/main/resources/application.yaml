@@ -16,12 +16,24 @@ spring:
   flyway:
     enabled: true
 
+springdoc:
+  swagger-ui:
+    oauth:
+      client-id: authorization-spa
+      use-pkce-with-authorization-code-grant: true
+      scopes:
+        - openid
+        - profile
+        - api.read
+
 app:
   oauth:
     # Base issuer/origin used to validate tenant issuer hosts. Tenant IDs are issuer paths.
     issuer: ${OAUTH_ISSUER:http://127.0.0.1:9000}
     spa-origin: ${SPA_ORIGIN:http://127.0.0.1:9000}
     spa-redirect-uri: ${SPA_REDIRECT_URI:http://127.0.0.1:9000/}
+    postman-redirect-uri: ${POSTMAN_REDIRECT_URI:https://oauth.pstmn.io/v1/callback}
+    postman-client-secret: ${POSTMAN_CLIENT_SECRET:postman-local-secret}
     custom-grant-code: ${CUSTOM_GRANT_CODE:local-demo-code}
     custom-grant-client-secret: ${CUSTOM_GRANT_CLIENT_SECRET:custom-grant-secret}
     registrar-client-secret: ${CLIENT_REGISTRAR_SECRET:client-registrar-secret}
@@ -35,3 +47,8 @@ app:
     enabled: ${BOOTSTRAP_USER_ENABLED:true}
     username: ${BOOTSTRAP_USER:demo}
     password: ${BOOTSTRAP_PASSWORD:demo12345}
+
+logging:
+  level:
+    org.springframework.security: TRACE
+    org.springframework.security.oauth2.server.authorization: TRACE
